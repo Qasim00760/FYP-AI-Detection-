@@ -5,29 +5,23 @@ __pycache__/
 .env
 venv/
 .venv/
-
 # Model files (too large for GitHub)
 *.pt
 *.pth
 *.onnx
 *.weights
-
 # Streamlit
 violations.csv
 .streamlit/
-
 # Node
 ai-detection-frontend/node_modules/
 ai-detection-frontend/dist/
 temp-node/
-
 # VS Code
 .vscode/
-
 # OS
 .DS_Store
 Thumbs.db
-
 # Rar files
 *.rar
 
