@@ -30,3 +30,9 @@ Thumbs.db
 
 # Rar files
 *.rar
+
+# Project model weights
+ai-detection-backend/models/*.pt
+ai-detection-backend/models/*.pth
+ai-detection-backend/models/*.onnx
+ai-detection-backend/models/*.weights
