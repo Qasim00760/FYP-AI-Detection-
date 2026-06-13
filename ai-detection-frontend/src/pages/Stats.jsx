@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://Qasim00760-ai-detection-backend.hf.space'
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://qasimktk-ai-detection-backend.hf.space'
 
 function StatsPage() {
   const [stats, setStats]   = useState(null)

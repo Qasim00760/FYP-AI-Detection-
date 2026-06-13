@@ -22,7 +22,7 @@ function Dashboard() {
   // NOTE: Replace with your deployed Hugging Face backend Space URL
   // Example: https://<YOUR_HF_USERNAME>-ai-detection-backend.hf.space
   const [backendUrl, setBackendUrl] = useState(
-    import.meta.env.VITE_BACKEND_URL || 'https://Qasim00760-ai-detection-backend.hf.space'
+    import.meta.env.VITE_BACKEND_URL || 'https://qasimktk-ai-detection-backend.hf.space'
   )
 
 
