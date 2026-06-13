@@ -19,7 +19,9 @@ function Dashboard() {
   // App States
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [backendUrl, setBackendUrl] = useState('http://127.0.0.1:8000') // Local development server
+  // NOTE: Replace with your deployed Hugging Face backend Space URL
+  // Example: https://<YOUR_HF_USERNAME>-ai-detection-backend.hf.space
+  const [backendUrl, setBackendUrl] = useState('https://YOUR_HF_USERNAME-ai-detection-backend.hf.space')
   const [results, setResults] = useState(null)
   const [isDragOver, setIsDragOver] = useState(false)
   
