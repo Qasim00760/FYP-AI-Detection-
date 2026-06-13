@@ -4,36 +4,42 @@ color 0A
 cd /d "C:\Users\Hassan\Desktop\Streamlit app - Copy -3\ai-detection-backend"
 
 echo ================================================
-echo   Deploying BACKEND to Hugging Face Spaces
+echo   BACKEND Deploy to Hugging Face Spaces
+echo   Space: Qasim00760/ai-detection-backend
 echo ================================================
 echo.
-echo Your HF username: Qasim00760
-echo Space name will be: ai-detection-backend
-echo URL will be: https://huggingface.co/spaces/Qasim00760/ai-detection-backend
+echo IMPORTANT: When asked for password, paste your
+echo HF Token (from huggingface.co/settings/tokens)
 echo.
+pause
 
-:: Check if git remote already set
-git remote remove hf-backend 2>nul
+:: Init git if needed
+if not exist ".git" (
+    git init
+    git checkout -b main
+)
 
-echo Setting up Hugging Face remote...
-git remote add hf-backend https://Qasim00760@huggingface.co/spaces/Qasim00760/ai-detection-backend
+:: Set remote
+git remote remove hf 2>nul
+git remote add hf https://Qasim00760@huggingface.co/spaces/Qasim00760/ai-detection-backend
 
+:: Stage and commit
+git add -A
+git commit -m "Deploy IBSCS backend v2"
+
+:: Push
 echo.
-echo Initializing local repo for backend...
-git init
-git add .
-git commit -m "Deploy IBSCS backend to Hugging Face"
-
+echo Pushing to Hugging Face... (enter HF token when prompted)
 echo.
-echo Pushing to Hugging Face...
-echo (You will be asked for your HF token as password)
-echo Get token from: https://huggingface.co/settings/tokens
-echo.
-git push hf-backend main --force
+git push hf main --force
 
 echo.
 echo ================================================
-echo DONE! Backend will be live at:
-echo https://Qasim00760-ai-detection-backend.hf.space
+echo Backend URL: https://Qasim00760-ai-detection-backend.hf.space
+echo API Docs:   https://Qasim00760-ai-detection-backend.hf.space/docs
+echo.
+echo NOTE: First build takes 5-10 minutes on HF.
+echo Watch progress at:
+echo https://huggingface.co/spaces/Qasim00760/ai-detection-backend
 echo ================================================
 pause

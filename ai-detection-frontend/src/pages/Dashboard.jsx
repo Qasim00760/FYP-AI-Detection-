@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react'
-import axios from 'axios'
-import ResultPanel from '../components/ResultPanel.jsx'
+import React, { useEffect, useRef, useState } from 'react'
+import { Chart, registerables } from 'chart.js'
+Chart.register(...registerables)
 
+<<<<<<< HEAD
 function Dashboard() {
   const [selectedModel, setSelectedModel] = useState('helmet') // helmet, plate, person
   const [inputMode, setInputMode] = useState('upload') // 'upload' or 'camera'
@@ -22,7 +23,7 @@ function Dashboard() {
   // NOTE: Replace with your deployed Hugging Face backend Space URL
   // Example: https://<YOUR_HF_USERNAME>-ai-detection-backend.hf.space
   const [backendUrl, setBackendUrl] = useState(
-    import.meta.env.VITE_BACKEND_URL || 'https://qasimktk-ai-detection-backend.hf.space'
+    import.meta.env.VITE_BACKEND_URL || 'https://Qasim00760-ai-detection-backend.hf.space'
   )
 
 
@@ -36,534 +37,385 @@ function Dashboard() {
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const frameProcessingRef = useRef(false)
+=======
+/* ── tiny helpers ── */
+const MetricIcon = ({ type, children }) => (
+  <div className={`metric-icon ${type}`}>{children}</div>
+)
+>>>>>>> bdd88234b97f0cde792c0d0911070ff3ac8e3c07
 
-  // Enumerate connected cameras
-  const getCameraDevices = async () => {
-    setError(null)
-    try {
-      // Request temporary permission to get labels
-      const tempStream = await navigator.mediaDevices.getUserMedia({ video: true })
-      tempStream.getTracks().forEach(track => track.stop())
-      
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      const videoDevices = devices.filter(device => device.kind === 'videoinput')
-      setCameras(videoDevices)
-      
-      if (videoDevices.length > 0 && !selectedCamera) {
-        setSelectedCamera(videoDevices[0].deviceId)
-      }
-    } catch (err) {
-      console.error("Error enumerating cameras:", err)
-      setError("Camera access permission denied or no cameras connected.")
-    }
-  }
+const TrendUp = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="18 15 12 9 6 15"/>
+  </svg>
+)
+const TrendDown = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+)
 
-  // Load cameras list on mode switch to camera
+/* ── Violation Trend Chart ── */
+function ViolationChart() {
+  const ref = useRef(null)
   useEffect(() => {
-    if (inputMode === 'camera') {
-      getCameraDevices()
-    } else {
-      stopCamera()
-    }
-  }, [inputMode])
-
-  // Turn off camera when component unmounts
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-      }
-    }
-  }, [])
-
-  // Start Camera Stream
-  const startCamera = async () => {
-    setError(null)
-    setResults(null)
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-      }
-      
-      const constraints = {
-        video: selectedCamera ? { deviceId: { exact: selectedCamera } } : true
-      }
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-      }
-      setIsCameraActive(true)
-    } catch (err) {
-      console.error("Error starting camera:", err)
-      setError("Failed to open camera stream. Make sure it is not in use by another app.")
-    }
-  }
-
-  // Stop Camera Stream
-  const stopCamera = () => {
-    setIsLiveDetecting(false)
-    setIsCameraActive(false)
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
-    setResults(null)
-  }
-
-  // Frame processing loop for Live Detection
-  const processLiveFrame = async () => {
-    if (!isLiveDetecting || !isCameraActive || frameProcessingRef.current) return
-
-    if (!videoRef.current || !canvasRef.current) {
-      requestAnimationFrame(processLiveFrame)
-      return
-    }
-
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      requestAnimationFrame(processLiveFrame)
-      return
-    }
-
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-    canvas.toBlob(async (blob) => {
-      if (!blob) {
-        requestAnimationFrame(processLiveFrame)
-        return
-      }
-
-      frameProcessingRef.current = true
-      
-      const cleanUrl = backendUrl.trim().replace(/\/+$/, '')
-      // Live stream detects all four classes simultaneously via /detect_all
-      const endpoint = `${cleanUrl}/detect_all`
-
-      const formData = new FormData()
-      formData.append('file', blob, 'frame.jpg')
-
-      try {
-        const response = await axios.post(endpoint, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
+    const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    const violations = [24, 31, 28, 45, 52, 38, 61, 74, 58, 83, 91, 76]
+    const challans   = [18, 22, 19, 34, 41, 29, 48, 60, 44, 67, 74, 59]
+    const chart = new Chart(ref.current, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Violations',
+            data: violations,
+            borderColor: '#EF4444',
+            backgroundColor: 'rgba(239,68,68,0.08)',
+            borderWidth: 2.5,
+            pointRadius: 4,
+            pointBackgroundColor: '#EF4444',
+            pointBorderColor: '#0F172A',
+            pointBorderWidth: 2,
+            tension: 0.4,
+            fill: true,
           },
-        })
-        if (response.data) {
-          setResults(response.data)
-        }
-      } catch (err) {
-        console.error("Live inference error:", err)
-        // Show error but don't halt the video stream loop
-      } finally {
-        frameProcessingRef.current = false
-        // Request next frame with minor delay to throttle request rate
-        if (isLiveDetecting) {
-          setTimeout(() => {
-            requestAnimationFrame(processLiveFrame)
-          }, 150) // Approx 6 FPS
-        }
-      }
-    }, 'image/jpeg', 0.65) // Compress slightly to optimize payload size
-  }
-
-  // Start processing frames when detection is active
-  useEffect(() => {
-    if (isLiveDetecting && isCameraActive) {
-      requestAnimationFrame(processLiveFrame)
-    }
-  }, [isLiveDetecting, isCameraActive])
-
-  // Drag and Drop handlers
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    setIsDragOver(true)
-  }
-
-  const handleDragLeave = () => {
-    setIsDragOver(false)
-  }
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    setIsDragOver(false)
-    const files = e.dataTransfer.files
-    if (files && files.length > 0) {
-      validateAndSetFile(files[0])
-    }
-  }
-
-  const handleFileChange = (e) => {
-    const files = e.target.files
-    if (files && files.length > 0) {
-      validateAndSetFile(files[0])
-    }
-  }
-
-  const triggerFileInput = () => {
-    fileInputRef.current.click()
-  }
-
-  const validateAndSetFile = (file) => {
-    const validTypes = ['image/jpeg', 'image/png', 'image/jpg']
-    if (!validTypes.includes(file.type)) {
-      setError('Unsupported file type. Please upload a JPG, JPEG, or PNG image.')
-      setImageFile(null)
-      setImagePreview(null)
-      setResults(null)
-      return
-    }
-    setError(null)
-    setImageFile(file)
-    setResults(null)
-    
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setImagePreview(reader.result)
-    }
-    reader.readAsDataURL(file)
-  }
-
-  const clearImage = () => {
-    setImageFile(null)
-    setImagePreview(null)
-    setResults(null)
-    setError(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
-
-  const handleDetection = async () => {
-    if (!imageFile) return
-    setLoading(true)
-    setError(null)
-    setResults(null)
-
-    const cleanUrl = backendUrl.trim().replace(/\/+$/, '')
-    const endpoint = `${cleanUrl}/${selectedModel}`
-
-    const formData = new FormData()
-    formData.append('file', imageFile)
-
-    try {
-      const response = await axios.post(endpoint, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
+          {
+            label: 'Challans Issued',
+            data: challans,
+            borderColor: '#2563EB',
+            backgroundColor: 'rgba(37,99,235,0.08)',
+            borderWidth: 2.5,
+            pointRadius: 4,
+            pointBackgroundColor: '#2563EB',
+            pointBorderColor: '#0F172A',
+            pointBorderWidth: 2,
+            tension: 0.4,
+            fill: true,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: {
+              color: '#94A3B8',
+              font: { family: 'Inter', size: 12 },
+              padding: 20,
+              usePointStyle: true,
+              pointStyleWidth: 8,
+            },
+          },
+          tooltip: {
+            backgroundColor: '#1E293B',
+            borderColor: '#243044',
+            borderWidth: 1,
+            titleColor: '#F1F5F9',
+            bodyColor: '#94A3B8',
+            padding: 12,
+            cornerRadius: 10,
+          },
         },
-      })
-      
-      if (response.data) {
-        setResults(response.data)
-      } else {
-        throw new Error('Received empty response from the server.')
-      }
-    } catch (err) {
-      console.error('API call failed:', err)
-      const errorMsg = err.response?.data?.detail 
-        || err.message 
-        || 'Failed to connect to the AI backend. Please verify your Space/API URL and ensure the backend is running.'
-      
-      setError(
-        `${errorMsg} (Target: ${endpoint}). Make sure CORS is enabled and the Hugging Face Space is active.`
-      )
-    } finally {
-      setLoading(false)
-    }
+        scales: {
+          x: {
+            grid: { color: 'rgba(36,48,68,0.6)', drawBorder: false },
+            ticks: { color: '#64748B', font: { family: 'Inter', size: 11.5 } },
+          },
+          y: {
+            grid: { color: 'rgba(36,48,68,0.6)', drawBorder: false },
+            ticks: { color: '#64748B', font: { family: 'Inter', size: 11.5 } },
+            beginAtZero: true,
+          },
+        },
+      },
+    })
+    return () => chart.destroy()
+  }, [])
+  return <canvas ref={ref} />
+}
+
+/* ── Helmet Compliance Donut ── */
+function ComplianceChart() {
+  const ref = useRef(null)
+  useEffect(() => {
+    const chart = new Chart(ref.current, {
+      type: 'doughnut',
+      data: {
+        labels: ['With Helmet', 'Violation'],
+        datasets: [{
+          data: [73, 27],
+          backgroundColor: ['rgba(34,197,94,0.85)', 'rgba(239,68,68,0.85)'],
+          borderColor: ['#22C55E', '#EF4444'],
+          borderWidth: 2,
+          hoverOffset: 6,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: '#94A3B8',
+              font: { family: 'Inter', size: 12 },
+              padding: 16,
+              usePointStyle: true,
+            },
+          },
+          tooltip: {
+            backgroundColor: '#1E293B',
+            borderColor: '#243044',
+            borderWidth: 1,
+            titleColor: '#F1F5F9',
+            bodyColor: '#94A3B8',
+            padding: 12,
+            cornerRadius: 10,
+            callbacks: { label: ctx => ` ${ctx.parsed}%` },
+          },
+        },
+      },
+    })
+    return () => chart.destroy()
+  }, [])
+  return <canvas ref={ref} />
+}
+
+/* ── Hourly Activity Bar Chart ── */
+function HourlyChart() {
+  const ref = useRef(null)
+  useEffect(() => {
+    const hours = ['6am','7am','8am','9am','10am','11am','12pm','1pm','2pm','3pm','4pm','5pm','6pm','7pm','8pm']
+    const data  = [2,5,11,18,9,7,6,8,10,14,17,21,12,8,4]
+    const chart = new Chart(ref.current, {
+      type: 'bar',
+      data: {
+        labels: hours,
+        datasets: [{
+          label: 'Detections',
+          data,
+          backgroundColor: data.map(v =>
+            v >= 15 ? 'rgba(239,68,68,0.75)' : v >= 10 ? 'rgba(245,158,11,0.75)' : 'rgba(37,99,235,0.6)'
+          ),
+          borderColor: data.map(v =>
+            v >= 15 ? '#EF4444' : v >= 10 ? '#F59E0B' : '#2563EB'
+          ),
+          borderWidth: 1,
+          borderRadius: 5,
+          borderSkipped: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1E293B',
+            borderColor: '#243044',
+            borderWidth: 1,
+            titleColor: '#F1F5F9',
+            bodyColor: '#94A3B8',
+            padding: 10,
+            cornerRadius: 8,
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: '#64748B', font: { family: 'Inter', size: 10.5 } },
+          },
+          y: {
+            grid: { color: 'rgba(36,48,68,0.6)', drawBorder: false },
+            ticks: { color: '#64748B', font: { family: 'Inter', size: 11 } },
+            beginAtZero: true,
+          },
+        },
+      },
+    })
+    return () => chart.destroy()
+  }, [])
+  return <canvas ref={ref} />
+}
+
+/* ── MAIN COMPONENT ── */
+export default function Dashboard({ onNavigate }) {
+  const metrics = [
+    { label: 'Total Violations',   value: '1,284', sub: 'Since deployment',     type: 'danger',  trend: '+14%', up: true,
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    },
+    { label: 'Total Challans',     value: '947',   sub: 'Successfully issued',   type: 'primary', trend: '+9%',  up: true,
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+    },
+    { label: 'Paid Challans',      value: '621',   sub: 'PKR 18.6M collected',   type: 'success', trend: '+22%', up: true,
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    },
+    { label: 'Pending Challans',   value: '326',   sub: 'Awaiting payment',      type: 'warning', trend: '-5%',  up: false,
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    },
+    { label: 'Unique Vehicles',    value: '834',   sub: 'Distinct number plates', type: 'info',   trend: '+7%',  up: true,
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+    },
+    { label: 'AI Accuracy Rate',   value: '94.2%', sub: 'Avg detection confidence', type: 'purple', trend: '+1.3%', up: true,
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/><circle cx="12" cy="12" r="3"/></svg>
+    },
+  ]
+
+  const recentActivity = [
+    { type: 'danger',  title: 'Violation Detected',   desc: 'Motorcycle without helmet — Plate: LHR-4892 | Conf: 96.3%', time: '2 min ago' },
+    { type: 'primary', title: 'Challan Issued',        desc: 'IBSCS-2025-000094 issued for PKR 1,500 | LHR-4892',        time: '3 min ago' },
+    { type: 'success', title: 'Payment Received',      desc: 'Challan IBSCS-2025-000082 paid — PKR 1,500',               time: '18 min ago' },
+    { type: 'warning', title: 'Low OCR Confidence',    desc: 'Plate OCR returned 68% — below threshold (75%)',           time: '35 min ago' },
+    { type: 'info',    title: 'Camera Feed Restored',  desc: 'Camera C-01 reconnected after 4-minute outage',            time: '51 min ago' },
+    { type: 'primary', title: 'Challan Issued',        desc: 'IBSCS-2025-000093 issued for PKR 1,500 | ISB-2241',        time: '1 hr ago' },
+  ]
+
+  const ACTIVITY_ICONS = {
+    danger:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>,
+    primary: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>,
+    success: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+    warning: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+    info:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
   }
+
+  const aiStats = [
+    { label: 'Helmet Model (YOLOv8)', value: '94.2%', bar: 94, color: 'primary' },
+    { label: 'Plate Detection Model', value: '96.7%', bar: 97, color: 'success' },
+    { label: 'OCR Accuracy (EasyOCR)', value: '89.1%', bar: 89, color: 'info' },
+    { label: 'False Positive Rate',   value: '5.8%',  bar: 6,  color: 'danger' },
+  ]
 
   return (
-    <div className="bg-slate-950 text-white min-h-screen py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto space-y-8">
-        
-        {/* Header Title */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-slate-900">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold font-display text-white flex items-center gap-2">
-              <span>🎯</span> Detection Dashboard
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">Detect helmets, passengers, plates, and persons using real-time cameras or image uploads.</p>
+    <div className="stagger">
+      {/* Header */}
+      <div className="page-header">
+        <div className="page-title-group">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <h1 className="page-title">Command Dashboard</h1>
+            <span className="ai-badge">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+              AI Powered
+            </span>
           </div>
+          <p className="page-subtitle">Real-time overview of the Integrated Bike Safety and Challan System</p>
+        </div>
+        <div className="page-actions">
+          <button className="btn btn-secondary" onClick={() => onNavigate('analytics')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Analytics
+          </button>
+          <button className="btn btn-primary" onClick={() => onNavigate('live')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14"/><rect x="3" y="8" width="12" height="8" rx="2"/></svg>
+            Live Feed
+          </button>
+        </div>
+      </div>
 
-          {/* Configurable Endpoint URL */}
-          <div className="w-full md:w-96 bg-slate-900 border border-slate-800 rounded-lg p-3">
-            <label htmlFor="backend-url" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-              Backend Server URL
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="backend-url"
-                type="text"
-                value={backendUrl}
-                onChange={(e) => setBackendUrl(e.target.value)}
-                placeholder="e.g. http://localhost:8000"
-                className="flex-grow bg-slate-950 border border-slate-800 focus:border-blue-500 rounded px-2 py-1 text-xs font-mono text-slate-350 focus:outline-none"
-              />
-              {backendUrl.includes('USERNAME') && (
-                <span className="text-[10px] text-amber-500 self-center animate-pulse">⚠️ Replace USERNAME</span>
-              )}
+      {/* Metric Cards */}
+      <div className="grid grid-3" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 24 }}>
+        {metrics.map((m, i) => (
+          <div key={i} className={`metric-card ${m.type}`}>
+            <div className="metric-header">
+              <MetricIcon type={m.type}>{m.icon}</MetricIcon>
+              <div className={`metric-trend ${m.up ? 'up' : 'down'}`}>
+                {m.up ? <TrendUp /> : <TrendDown />}
+                {m.trend}
+              </div>
+            </div>
+            <div className="metric-value">{m.value}</div>
+            <div className="metric-label">{m.label}</div>
+            <div className="metric-sub">{m.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Row 2: Trend Chart + Compliance */}
+      <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 24 }}>
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Violation & Challan Trend</div>
+              <div className="card-subtitle">Monthly comparison — current year</div>
+            </div>
+            <span className="badge muted">2025</span>
+          </div>
+          <div className="chart-container tall">
+            <ViolationChart />
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Helmet Compliance</div>
+              <div className="card-subtitle">Overall detection rate</div>
             </div>
           </div>
+          <div className="chart-container" style={{ height: 200 }}>
+            <ComplianceChart />
+          </div>
+          <div className="divider" />
+          <div>
+            {[
+              { label: 'Compliance Rate', value: '73%', color: 'var(--success)' },
+              { label: 'Violation Rate',  value: '27%', color: 'var(--danger)' },
+              { label: 'Avg Confidence',  value: '94.2%', color: 'var(--primary)' },
+            ].map((s, i) => (
+              <div key={i} className="stat-row">
+                <div className="stat-label">{s.label}</div>
+                <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
+      </div>
 
-        {/* Input Mode Selector */}
-        <div className="flex justify-center">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-1 flex">
-            <button
-              onClick={() => { setInputMode('upload'); setResults(null); }}
-              className={`px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 font-display flex items-center gap-2 ${
-                inputMode === 'upload'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <span>📂</span> File Upload
-            </button>
-            <button
-              onClick={() => { setInputMode('camera'); setResults(null); }}
-              className={`px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 font-display flex items-center gap-2 ${
-                inputMode === 'camera'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <span>📹</span> Live Camera
-            </button>
+      {/* Row 3: Hourly + Activity + AI Stats */}
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
+        {/* Hourly */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Hourly Detections</div>
+              <div className="card-subtitle">Today's activity heatmap</div>
+            </div>
+          </div>
+          <div className="chart-container" style={{ height: 200 }}>
+            <HourlyChart />
+          </div>
+          <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
+            {[['Peak Hour','8:00 AM','var(--danger)'],['Detections Today','152','var(--primary)'],['Avg/Hour','10.2','var(--text-secondary)']].map(([l,v,c], i) => (
+              <div key={i} style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: c, letterSpacing: '-0.02em' }}>{v}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{l}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Model Tabs Selection (Only visible in Upload Mode) */}
-        {inputMode === 'upload' && (
-          <div className="flex flex-wrap gap-2 sm:gap-4 justify-center animate-fadeIn">
-            <button
-              onClick={() => { setSelectedModel('helmet'); setResults(null); }}
-              className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-semibold font-display text-sm sm:text-base border transition-all duration-300 ${
-                selectedModel === 'helmet'
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-400 text-white shadow-lg shadow-blue-500/20'
-                  : 'bg-slate-900 border-slate-800 text-slate-450 hover:bg-slate-850 hover:text-white'
-              }`}
-            >
-              <span>🪖</span>
-              <span>Helmet Detection</span>
-            </button>
-            
-            <button
-              onClick={() => { setSelectedModel('plate'); setResults(null); }}
-              className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-semibold font-display text-sm sm:text-base border transition-all duration-300 ${
-                selectedModel === 'plate'
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-400 text-white shadow-lg shadow-blue-500/20'
-                  : 'bg-slate-900 border-slate-800 text-slate-450 hover:bg-slate-850 hover:text-white'
-              }`}
-            >
-              <span>🚗</span>
-              <span>Number Plate</span>
-            </button>
-
-            <button
-              onClick={() => { setSelectedModel('person'); setResults(null); }}
-              className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-semibold font-display text-sm sm:text-base border transition-all duration-300 ${
-                selectedModel === 'person'
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-400 text-white shadow-lg shadow-blue-500/20'
-                  : 'bg-slate-900 border-slate-800 text-slate-450 hover:bg-slate-850 hover:text-white'
-              }`}
-            >
-              <span>👤</span>
-              <span>Person Detection</span>
-            </button>
+        {/* Recent Activity */}
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Recent Activity</div>
+            <button className="btn btn-ghost btn-xs">View All</button>
           </div>
-        )}
-
-        {/* Dashboard Panels Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          
-          {/* Left Panel: Controls (Conditional based on Input Mode) */}
-          <div className="md:col-span-1 space-y-6">
-            
-            {/* FILE UPLOAD MODE */}
-            {inputMode === 'upload' && (
-              <div className="bg-slate-900 border border-slate-850 rounded-xl p-6 shadow-xl space-y-4 animate-fadeIn">
-                <h2 className="text-lg font-bold font-display text-white">Input Image</h2>
-                
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={triggerFileInput}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-300 ${
-                    isDragOver
-                      ? 'border-blue-500 bg-blue-500/5'
-                      : imagePreview
-                      ? 'border-slate-800 bg-slate-950/20'
-                      : 'border-slate-800 hover:border-slate-700 bg-slate-950/40'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    accept=".jpg,.jpeg,.png"
-                    className="hidden"
-                  />
-
-                  {imagePreview ? (
-                    <div className="relative group overflow-hidden rounded-lg">
-                      <img
-                        src={imagePreview}
-                        alt="Upload Preview"
-                        className="max-h-48 mx-auto object-cover rounded-lg"
-                      />
-                      <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center rounded-lg">
-                        <span className="text-xs font-semibold text-slate-200 bg-slate-900/80 px-2.5 py-1.5 rounded-md border border-slate-800">
-                          Click or Drop to Replace
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 py-6">
-                      <div className="text-4xl text-slate-500">📥</div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-200">Drag & Drop Image Here</p>
-                        <p className="text-xs text-slate-500 mt-1">or click to browse directories</p>
-                      </div>
-                      <p className="text-[10px] text-slate-500">Supports: JPG, JPEG, PNG</p>
-                    </div>
-                  )}
+          <div className="timeline">
+            {recentActivity.map((a, i) => (
+              <div key={i} className="timeline-item">
+                <div className="timeline-line">
+                  <div className={`timeline-dot ${a.type}`}>{ACTIVITY_ICONS[a.type]}</div>
+                  <div className="timeline-connector" />
                 </div>
-
-                {imageFile && (
-                  <div className="flex items-center justify-between text-xs bg-slate-950/60 border border-slate-850 rounded p-2.5 font-mono text-slate-400">
-                    <span className="truncate max-w-[150px]">{imageFile.name}</span>
-                    <button
-                      onClick={clearImage}
-                      className="text-rose-400 hover:text-rose-300 font-bold hover:scale-105 transition-transform"
-                      title="Remove Image"
-                    >
-                      Clear [X]
-                    </button>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleDetection}
-                  disabled={!imageFile || loading}
-                  className={`w-full py-3.5 rounded-xl font-bold font-display flex items-center justify-center space-x-2 transition-all duration-300 shadow-md ${
-                    !imageFile
-                      ? 'bg-slate-800 text-slate-500 border border-slate-850 cursor-not-allowed'
-                      : loading
-                      ? 'bg-blue-600/50 text-slate-300 border border-blue-500/20 cursor-wait'
-                      : 'bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/20 shadow-blue-500/10 hover:shadow-blue-500/20 hover:-translate-y-0.5'
-                  }`}
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Analyzing image...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>🔍</span>
-                      <span>Detect Now</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* LIVE WEBCAM MODE */}
-            {inputMode === 'camera' && (
-              <div className="bg-slate-900 border border-slate-850 rounded-xl p-6 shadow-xl space-y-5 animate-fadeIn">
-                <h2 className="text-lg font-bold font-display text-white">Camera Controls</h2>
-                
-                {/* External/Internal Camera Device Selector */}
-                <div className="space-y-1.5">
-                  <label htmlFor="camera-select" className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    Select Input Camera
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      id="camera-select"
-                      value={selectedCamera}
-                      onChange={(e) => {
-                        setSelectedCamera(e.target.value)
-                        if (isCameraActive) {
-                          setTimeout(startCamera, 100)
-                        }
-                      }}
-                      className="flex-grow bg-slate-950 border border-slate-800 focus:border-blue-500 rounded px-2.5 py-2 text-sm text-slate-200 focus:outline-none"
-                    >
-                      {cameras.length > 0 ? (
-                        cameras.map((device) => (
-                          <option key={device.deviceId} value={device.deviceId}>
-                            {device.label || `Camera ${device.deviceId.substring(0, 5)}...`}
-                          </option>
-                        ))
-                      ) : (
-                        <option value="">No cameras loaded</option>
-                      )}
-                    </select>
-                    
-                    <button
-                      onClick={getCameraDevices}
-                      className="px-3 bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded text-slate-350 hover:text-white transition-colors"
-                      title="Reload connected cameras"
-                    >
-                      🔄
-                    </button>
-                  </div>
-                </div>
-
-                {/* Stream Actions */}
-                <div className="space-y-3 pt-2">
-                  {!isCameraActive ? (
-                    <button
-                      onClick={startCamera}
-                      className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold font-display rounded-xl border border-blue-400/20 shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 transition-all"
-                    >
-                      Open Camera
-                    </button>
-                  ) : (
-                    <>
-                      {/* Live Inference Toggle */}
-                      {!isLiveDetecting ? (
-                        <button
-                          onClick={() => setIsLiveDetecting(true)}
-                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold font-display rounded-xl border border-emerald-400/20 shadow-md shadow-emerald-500/10 transition-all flex items-center justify-center gap-2"
-                        >
-                          <span>⚡</span> Start Live Detection
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setIsLiveDetecting(false)}
-                          className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold font-display rounded-xl border border-amber-400/20 shadow-md shadow-amber-500/10 transition-all flex items-center justify-center gap-2"
-                        >
-                          <span>⏸️</span> Pause Detection
-                        </button>
-                      )}
-                      
-                      <button
-                        onClick={stopCamera}
-                        className="w-full py-3 bg-rose-700 hover:bg-rose-600 text-white font-semibold font-display rounded-xl border border-rose-500/20 transition-all"
-                      >
-                        Close Camera
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* Helpful Tip */}
-                <div className="text-[11px] text-slate-500 bg-slate-950/40 border border-slate-850 p-3 rounded-lg leading-relaxed">
-                  💡 <strong>Multi-Model Pipeline active:</strong> Bypassing individual models to run Safety Helmet, License Plate, and Passenger detection simultaneously on your live stream.
+                <div className="timeline-content">
+                  <div className="timeline-title">{a.title}</div>
+                  <div className="timeline-desc">{a.desc}</div>
+                  <div className="timeline-time">{a.time}</div>
                 </div>
               </div>
+<<<<<<< HEAD
             )}
           </div>
 
@@ -706,13 +558,50 @@ function Dashboard() {
               </div>
             )}
 
+=======
+            ))}
+>>>>>>> bdd88234b97f0cde792c0d0911070ff3ac8e3c07
           </div>
         </div>
 
+        {/* AI Detection Stats */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">AI Model Performance</div>
+              <div className="card-subtitle">Live inference statistics</div>
+            </div>
+            <span className="ai-badge">Live</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
+            {aiStats.map((s, i) => (
+              <div key={i}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontWeight: 500 }}>{s.label}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{s.value}</span>
+                </div>
+                <div className="progress-bar">
+                  <div className={`progress-fill ${s.color}`} style={{ width: `${s.bar}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="divider" />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 4 }}>
+            {[
+              { label: 'Avg Inference', value: '38ms',    icon: '⚡' },
+              { label: 'Model Uptime',  value: '99.8%',   icon: '🟢' },
+              { label: 'Queue Length',  value: '0 jobs',  icon: '📋' },
+              { label: 'GPU Usage',     value: 'N/A (CPU)', icon: '🖥️' },
+            ].map((s, i) => (
+              <div key={i} style={{ background: 'var(--bg-muted)', borderRadius: 'var(--radius)', padding: '10px 12px', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>{s.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
 }
-
-export default Dashboard
-

@@ -92,16 +92,15 @@ async def load_models():
     global helmet_model, plate_model, person_model
     os.makedirs("models", exist_ok=True)
 
-    model_configs = [
-        ("helmet_model", "models/helmet.pt"),
-        ("plate_model",  "models/plate.pt"),
-        ("person_model", "models/person.pt"),
-    ]
-    for attr, path in model_configs:
+    for attr, path, fallback in [
+        ("helmet_model", "models/helmet.pt",  True),
+        ("plate_model",  "models/plate.pt",   True),
+        ("person_model", "models/person.pt",  True),
+    ]:
         if os.path.exists(path):
             print(f"Loading {path}")
             globals()[attr] = YOLO(path)
-        else:
+        elif fallback:
             print(f"Warning: {path} not found. Using yolov8n.pt fallback.")
             globals()[attr] = YOLO("yolov8n.pt")
 
