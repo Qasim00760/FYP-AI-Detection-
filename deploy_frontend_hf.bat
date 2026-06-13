@@ -7,55 +7,45 @@ set PATH=%NODE%;%PATH%
 echo ================================================
 echo   FRONTEND Deploy to Hugging Face Spaces
 echo   Space: Qasim00760/ai-detection-frontend
+echo   SDK: Static
 echo ================================================
 echo.
-echo IMPORTANT: When asked for password, paste your
-echo HF Token (from huggingface.co/settings/tokens)
+echo When asked for password: paste your HF Token
+echo Get token: https://huggingface.co/settings/tokens
 echo.
 pause
 
-:: Build React app
-echo [1/4] Building React app...
+:: Step 1: Build
+echo [1/3] Building React app...
 cd /d "C:\Users\Hassan\Desktop\Streamlit app - Copy -3\ai-detection-frontend"
 "%NODE%\npm.cmd" run build
-if errorlevel 1 (
-    echo BUILD FAILED! Check errors above.
-    pause
-    exit /b 1
-)
-echo Build OK!
+if errorlevel 1 ( echo BUILD FAILED! & pause & exit /b 1 )
+echo Build complete!
 
-:: Go into dist
+:: Step 2: Setup git in dist
+echo [2/3] Setting up dist folder for HF...
 cd dist
-echo.
 
-:: Init git in dist
-echo [2/4] Setting up git in dist...
-if not exist ".git" (
-    git init
-    git checkout -b main
-)
+if exist ".git" ( rmdir /s /q .git )
+git init
+git checkout -b main
+git config user.email "deploy@ibscs.app"
+git config user.name "IBSCS Deploy"
 
-git remote remove hf 2>nul
 git remote add hf https://Qasim00760@huggingface.co/spaces/Qasim00760/ai-detection-frontend
 
-:: Commit
-echo [3/4] Committing built files...
 git add -A
-git commit -m "Deploy IBSCS frontend"
+git commit -m "Deploy IBSCS frontend - built React app"
 
-:: Push
-echo.
-echo [4/4] Pushing to Hugging Face... (enter HF token when prompted)
+:: Step 3: Push
+echo [3/3] Pushing to Hugging Face...
+echo (Enter your HF Token when prompted for password)
 echo.
 git push hf main --force
 
 echo.
 echo ================================================
-echo Frontend URL: https://Qasim00760-ai-detection-frontend.hf.space
-echo.
-echo NOTE: Static sites go live in ~1 minute.
-echo Watch at:
-echo https://huggingface.co/spaces/Qasim00760/ai-detection-frontend
+echo Frontend live at:
+echo https://Qasim00760-ai-detection-frontend.hf.space
 echo ================================================
 pause

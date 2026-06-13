@@ -1,45 +1,47 @@
 @echo off
 title Deploy Backend to Hugging Face
 color 0A
-cd /d "C:\Users\Hassan\Desktop\Streamlit app - Copy -3\ai-detection-backend"
 
 echo ================================================
 echo   BACKEND Deploy to Hugging Face Spaces
 echo   Space: Qasim00760/ai-detection-backend
+echo   SDK: Docker
 echo ================================================
 echo.
-echo IMPORTANT: When asked for password, paste your
-echo HF Token (from huggingface.co/settings/tokens)
+echo When asked for password: paste your HF Token
+echo Get token: https://huggingface.co/settings/tokens
 echo.
 pause
 
-:: Init git if needed
+cd /d "C:\Users\Hassan\Desktop\Streamlit app - Copy -3\ai-detection-backend"
+
+:: Setup git
 if not exist ".git" (
     git init
     git checkout -b main
 )
+git config user.email "deploy@ibscs.app"
+git config user.name "IBSCS Deploy"
 
-:: Set remote
 git remote remove hf 2>nul
 git remote add hf https://Qasim00760@huggingface.co/spaces/Qasim00760/ai-detection-backend
 
-:: Stage and commit
 git add -A
-git commit -m "Deploy IBSCS backend v2"
+git commit -m "Deploy IBSCS backend v2 - FastAPI + YOLO"
 
-:: Push
 echo.
-echo Pushing to Hugging Face... (enter HF token when prompted)
+echo Pushing to Hugging Face... (Enter HF Token as password)
 echo.
 git push hf main --force
 
 echo.
 echo ================================================
-echo Backend URL: https://Qasim00760-ai-detection-backend.hf.space
-echo API Docs:   https://Qasim00760-ai-detection-backend.hf.space/docs
+echo Backend live at:
+echo https://Qasim00760-ai-detection-backend.hf.space
+echo API Docs:
+echo https://Qasim00760-ai-detection-backend.hf.space/docs
 echo.
-echo NOTE: First build takes 5-10 minutes on HF.
-echo Watch progress at:
-echo https://huggingface.co/spaces/Qasim00760/ai-detection-backend
+echo NOTE: Docker build takes 5-10 minutes on HF.
+echo Watch: https://huggingface.co/spaces/Qasim00760/ai-detection-backend
 echo ================================================
 pause
