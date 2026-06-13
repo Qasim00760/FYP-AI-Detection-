@@ -1,5 +1,6 @@
 import React from 'react'
 import { HashRouter, Routes, Route } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import Navbar from './components/Navbar.jsx'
 import Footer from './components/Footer.jsx'
 import Home from './pages/Home.jsx'
@@ -27,6 +28,7 @@ function App() {
         {/* Footer */}
         <Footer />
       </div>
+      <Analytics />
     </HashRouter>
   )
 }
