@@ -21,7 +21,8 @@ function Dashboard() {
   const [error, setError] = useState(null)
   // NOTE: Replace with your deployed Hugging Face backend Space URL
   // Example: https://<YOUR_HF_USERNAME>-ai-detection-backend.hf.space
-  const [backendUrl, setBackendUrl] = useState('https://YOUR_HF_USERNAME-ai-detection-backend.hf.space')
+  const [backendUrl, setBackendUrl] = useState('https://huggingface.co/spaces/qasimktk/FYP-AI-Detection')
+
   const [results, setResults] = useState(null)
   const [isDragOver, setIsDragOver] = useState(false)
   
