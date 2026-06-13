@@ -615,9 +615,11 @@ function Dashboard() {
 
                 {results && !loading && (
                   <ResultPanel
+                    fullResults={results}
                     detections={results.detections}
                     annotatedImage={results.annotated_image}
                     originalImage={imagePreview}
+                    backendUrl={backendUrl}
                   />
                 )}
               </>
@@ -694,9 +696,11 @@ function Dashboard() {
                 {/* Detections lists */}
                 {results && (
                   <ResultPanel
+                    fullResults={results}
                     detections={results.detections}
                     annotatedImage={results.annotated_image}
-                    originalImage={null} // Bypassed side-by-side inside result panel since they are drawn above
+                    originalImage={null}
+                    backendUrl={backendUrl}
                   />
                 )}
               </div>

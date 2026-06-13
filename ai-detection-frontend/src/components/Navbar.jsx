@@ -30,17 +30,17 @@ function Navbar() {
           {/* Logo / Brand Name */}
           <div className="flex items-center">
             <Link to="/" className="flex items-center space-x-2 group">
-              <span className="text-2xl group-hover:scale-110 transition-transform duration-300">🤖</span>
+              <span className="text-2xl group-hover:scale-110 transition-transform duration-300">🚴</span>
               <span className="text-xl font-bold font-display tracking-tight text-white bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                AI Detection
+                IBSCS
               </span>
             </Link>
           </div>
 
           {/* Desktop Navigation Links */}
           <div className="hidden md:block">
-            <div className="ml-10 flex items-baseline space-x-4">
-              <NavLink to="/" className={navLinkClass}>
+            <div className="ml-10 flex items-baseline space-x-2">
+              <NavLink to="/" end className={navLinkClass}>
                 Home
               </NavLink>
               <NavLink to="/about" className={navLinkClass}>
@@ -49,8 +49,17 @@ function Navbar() {
               <NavLink to="/how-it-works" className={navLinkClass}>
                 How It Works
               </NavLink>
+              <NavLink to="/stats" className={navLinkClass}>
+                📊 Stats
+              </NavLink>
+              <NavLink to="/violations" className={navLinkClass}>
+                📋 Violations
+              </NavLink>
+              <NavLink to="/challans" className={navLinkClass}>
+                🎫 Challans
+              </NavLink>
               <NavLink to="/dashboard" className="px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 border border-blue-400/20">
-                Dashboard
+                🎯 AI Detect
               </NavLink>
             </div>
           </div>
@@ -82,17 +91,26 @@ function Navbar() {
       {/* Mobile Menu */}
       <div className={`${isOpen ? 'block animate-fadeIn' : 'hidden'} md:hidden`} id="mobile-menu">
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-slate-900 border-b border-slate-800">
-          <NavLink to="/" onClick={() => setIsOpen(false)} className={mobileNavLinkClass}>
-            Home
+          <NavLink to="/" end onClick={() => setIsOpen(false)} className={mobileNavLinkClass}>
+            🏠 Home
           </NavLink>
           <NavLink to="/about" onClick={() => setIsOpen(false)} className={mobileNavLinkClass}>
-            About
+            ℹ️ About
           </NavLink>
           <NavLink to="/how-it-works" onClick={() => setIsOpen(false)} className={mobileNavLinkClass}>
-            How It Works
+            ⚙️ How It Works
+          </NavLink>
+          <NavLink to="/stats" onClick={() => setIsOpen(false)} className={mobileNavLinkClass}>
+            📊 Statistics
+          </NavLink>
+          <NavLink to="/violations" onClick={() => setIsOpen(false)} className={mobileNavLinkClass}>
+            📋 Violations
+          </NavLink>
+          <NavLink to="/challans" onClick={() => setIsOpen(false)} className={mobileNavLinkClass}>
+            🎫 Challans
           </NavLink>
           <NavLink to="/dashboard" onClick={() => setIsOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-white bg-blue-600 hover:bg-blue-500 text-center font-display shadow-md">
-            Dashboard
+            🎯 AI Detection
           </NavLink>
         </div>
       </div>

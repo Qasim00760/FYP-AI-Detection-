@@ -6,6 +6,9 @@ import Home from './pages/Home.jsx'
 import About from './pages/About.jsx'
 import HowItWorks from './pages/HowItWorks.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import Violations from './pages/Violations.jsx'
+import Challans from './pages/Challans.jsx'
+import StatsPage from './pages/Stats.jsx'
 
 function App() {
   return (
@@ -21,6 +24,9 @@ function App() {
             <Route path="/about" element={<About />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/violations" element={<Violations />} />
+            <Route path="/challans" element={<Challans />} />
+            <Route path="/stats" element={<StatsPage />} />
           </Routes>
         </main>
         

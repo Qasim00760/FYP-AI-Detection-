@@ -1,20 +1,25 @@
 import io
 import os
+import csv
+import uuid
 import base64
 import numpy as np
 import cv2
 from PIL import Image
+from datetime import datetime
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import Optional
 from ultralytics import YOLO
 
 app = FastAPI(
-    title="AI Detection API",
-    description="FastAPI service running YOLOv8 object detection models (Helmet, Plate, Person)",
-    version="1.0.0"
+    title="IBSCS AI Detection API",
+    description="FastAPI backend for Integrated Bike Safety and Challan System",
+    version="2.0.0"
 )
 
-# Enable CORS for frontend requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,280 +28,441 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global variables for models
+# ==========================
+# PATHS & CSV SETUP
+# ==========================
+DATA_DIR      = "data"
+EVIDENCE_DIR  = "outputs/evidence"
+VIOLATIONS_CSV = os.path.join(DATA_DIR, "violations.csv")
+CHALLANS_CSV   = os.path.join(DATA_DIR, "challans.csv")
+
+os.makedirs(DATA_DIR,     exist_ok=True)
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
+
+VIOLATION_COLS = ["id", "vehicle_number", "helmet_status", "helmet_confidence",
+                  "ocr_confidence", "image_path", "timestamp", "source_type"]
+CHALLAN_COLS   = ["challan_number", "vehicle_number", "amount", "status",
+                  "created_at", "paid_at", "evidence_path"]
+
+def init_csv(path, cols):
+    if not os.path.exists(path):
+        with open(path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=cols)
+            writer.writeheader()
+
+init_csv(VIOLATIONS_CSV, VIOLATION_COLS)
+init_csv(CHALLANS_CSV,   CHALLAN_COLS)
+
+# ==========================
+# CSV HELPERS
+# ==========================
+def read_csv(path, cols):
+    rows = []
+    if not os.path.exists(path):
+        return rows
+    with open(path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            rows.append(dict(row))
+    return rows
+
+def append_csv(path, cols, row):
+    file_exists = os.path.exists(path)
+    with open(path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=cols)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+def rewrite_csv(path, cols, rows):
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=cols)
+        writer.writeheader()
+        writer.writerows(rows)
+
+# ==========================
+# MODELS
+# ==========================
 helmet_model = None
-plate_model = None
+plate_model  = None
 person_model = None
 
 @app.on_event("startup")
 async def load_models():
     global helmet_model, plate_model, person_model
-    print("Startup: Loading YOLOv8 models...")
-    
-    # Ensure models directory exists
     os.makedirs("models", exist_ok=True)
-    
-    # Loading Helmet model
-    helmet_path = os.path.join("models", "helmet.pt")
-    if os.path.exists(helmet_path):
-        print(f"Loading custom helmet model from: {helmet_path}")
-        helmet_model = YOLO(helmet_path)
-    else:
-        print(f"Warning: {helmet_path} not found. Loading standard yolov8n.pt as fallback.")
-        helmet_model = YOLO("yolov8n.pt")
-        
-    # Loading Plate model
-    plate_path = os.path.join("models", "plate.pt")
-    if os.path.exists(plate_path):
-        print(f"Loading custom plate model from: {plate_path}")
-        plate_model = YOLO(plate_path)
-    else:
-        print(f"Warning: {plate_path} not found. Loading standard yolov8n.pt as fallback.")
-        plate_model = YOLO("yolov8n.pt")
-        
-    # Loading Person model
-    person_path = os.path.join("models", "person.pt")
-    if os.path.exists(person_path):
-        print(f"Loading custom person model from: {person_path}")
-        person_model = YOLO(person_path)
-    else:
-        print(f"Warning: {person_path} not found. Loading standard yolov8n.pt as fallback.")
-        person_model = YOLO("yolov8n.pt")
-        
-    print("Startup: Models successfully loaded!")
 
+    for attr, path, fallback in [
+        ("helmet_model", "models/helmet.pt",  True),
+        ("plate_model",  "models/plate.pt",   True),
+        ("person_model", "models/person.pt",  True),
+    ]:
+        if os.path.exists(path):
+            print(f"Loading {path}")
+            globals()[attr] = YOLO(path)
+        elif fallback:
+            print(f"Warning: {path} not found. Using yolov8n.pt fallback.")
+            globals()[attr] = YOLO("yolov8n.pt")
 
-def run_inference(model, image_bytes):
-    """
-    Helper function to run YOLO inference on input image bytes.
-    Draws annotated bounding boxes using OpenCV and outputs base64 JPEGs.
-    """
-    if model is None:
-        raise ValueError("Model is not initialized.")
-        
-    # 1. Convert bytes to PIL Image and ensure RGB
-    try:
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    except Exception as e:
-        raise ValueError(f"Failed to decode image: {str(e)}")
-        
-    # 2. Convert PIL Image to OpenCV BGR numpy array
+    helmet_model = globals()["helmet_model"]
+    plate_model  = globals()["plate_model"]
+    person_model = globals()["person_model"]
+    print("All models loaded.")
+
+# ==========================
+# DETECTION HELPERS
+# ==========================
+def decode_image(image_bytes):
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img_bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-    original_height, original_width = img_bgr.shape[:2]
-    
-    # 3. Run model inference
-    results = model(img_bgr)
-    
+    return img_bgr
+
+def run_inference(model, img_bgr, conf_thresh=0.25):
+    results    = model(img_bgr)
     detections = []
-    boxes = results[0].boxes
-    
+    boxes      = results[0].boxes
+
     if boxes is not None:
         for box in boxes:
-            # Coordinates
             x1, y1, x2, y2 = box.xyxy[0].tolist()
-            conf = float(box.conf[0])
-            cls_id = int(box.cls[0])
+            conf      = float(box.conf[0])
+            cls_id    = int(box.cls[0])
             class_name = model.names[cls_id]
-            
+            if conf < conf_thresh:
+                continue
             detections.append({
-                "class": class_name,
+                "class":      class_name,
                 "confidence": conf,
-                "bbox": [x1, y1, x2, y2]
+                "bbox":       [x1, y1, x2, y2]
             })
-            
-            # 4. Draw bounding boxes on the image buffer
-            # Select color based on category
-            color = (59, 130, 246)  # Default Blue BGR (246, 130, 59) -> (x,y,z) is (B,G,R)
-            if "no" in class_name.lower():
-                color = (59, 17, 244)  # Reddish
-            elif class_name.lower() == "helmet":
-                color = (16, 185, 129) # Emerald Green BGR
-            elif class_name.lower() == "person":
-                color = (99, 102, 241) # Indigo BGR
-                
-            # Draw rectangle
-            cv2.rectangle(img_bgr, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-            
-            # Label overlay
-            label = f"{class_name} {conf:.2%}"
-            (text_width, text_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            
-            # Ensure banner text box doesn't clip screen boundaries
-            label_y = max(int(y1), text_height + 10)
-            
-            # Draw filled rectangle for label text background
-            cv2.rectangle(
-                img_bgr, 
-                (int(x1), label_y - text_height - 6), 
-                (int(x1) + text_width + 4, label_y), 
-                color, 
-                -1
-            )
-            
-            # Put text label on background
-            cv2.putText(
-                img_bgr, 
-                label, 
-                (int(x1) + 2, label_y - 3), 
-                cv2.FONT_HERSHEY_SIMPLEX, 
-                0.45, 
-                (255, 255, 255), 
-                1, 
-                lineType=cv2.LINE_AA
-            )
-            
-    # 5. Convert OpenCV annotated image buffer back to base64 string
+    return detections
+
+def annotate_image(img_bgr, detections, model_type="generic"):
+    img = img_bgr.copy()
+    for det in detections:
+        x1, y1, x2, y2 = [int(v) for v in det["bbox"]]
+        cls  = det["class"].lower()
+        conf = det["confidence"]
+
+        # Color by class
+        if "without" in cls or "no helmet" in cls:
+            color = (59, 17, 244)    # Red BGR
+        elif "with" in cls or cls == "helmet":
+            color = (16, 185, 129)   # Green BGR
+        elif "rider" in cls or "person" in cls or "passenger" in cls:
+            color = (99, 102, 241)   # Indigo BGR
+        elif "plate" in cls or "number" in cls:
+            color = (36, 191, 251)   # Amber BGR
+        else:
+            color = (59, 130, 246)   # Blue BGR
+
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+        label = f"{det['class']} {conf:.0%}"
+        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
+        label_y = max(y1, th + 10)
+        cv2.rectangle(img, (x1, label_y - th - 6), (x1 + tw + 4, label_y), color, -1)
+        cv2.putText(img, label, (x1 + 2, label_y - 3),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
+    return img
+
+def image_to_base64(img_bgr):
     _, buffer = cv2.imencode('.jpg', img_bgr)
-    annotated_base64 = base64.b64encode(buffer).decode('utf-8')
-    
-    # 6. Return response payload
-    return {
-        "detections": detections,
-        "annotated_image": annotated_base64,
-        "count": len(detections)
-    }
+    return base64.b64encode(buffer).decode('utf-8')
 
+def detect_helmet_violation(detections):
+    """Returns helmet violation status using higher-confidence rule."""
+    with_conf    = 0.0
+    without_conf = 0.0
+    for det in detections:
+        cls  = det["class"].lower()
+        conf = det["confidence"]
+        if "without" in cls or "no helmet" in cls:
+            without_conf = max(without_conf, conf)
+        elif "with" in cls or cls == "helmet":
+            with_conf = max(with_conf, conf)
 
+    if with_conf > 0 and without_conf > 0:
+        violation = without_conf > with_conf
+        status    = "Without Helmet" if violation else "With Helmet"
+        conf_val  = without_conf if violation else with_conf
+    elif without_conf > 0:
+        violation, status, conf_val = True,  "Without Helmet", without_conf
+    elif with_conf > 0:
+        violation, status, conf_val = False, "With Helmet",    with_conf
+    else:
+        violation, status, conf_val = False, "No Rider Detected", 0.0
+
+    return violation, status, conf_val
+
+def generate_challan_number():
+    rows = read_csv(CHALLANS_CSV, CHALLAN_COLS)
+    year = datetime.now().year
+    num  = len(rows) + 1
+    return f"IBSCS-{year}-{num:06d}"
+
+def save_evidence(img_bgr, vehicle_number):
+    ts        = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = "".join(c for c in vehicle_number if c.isalnum()) or "UNKNOWN"
+    filename  = f"{safe_name}_{ts}.jpg"
+    filepath  = os.path.join(EVIDENCE_DIR, filename)
+    cv2.imwrite(filepath, img_bgr)
+    return filepath
+
+# ==========================
+# PYDANTIC MODELS
+# ==========================
+class ViolationIn(BaseModel):
+    vehicle_number:    str
+    helmet_status:     str
+    helmet_confidence: float
+    ocr_confidence:    float
+    image_path:        Optional[str] = ""
+    source_type:       Optional[str] = "image_upload"
+
+class ChallanIn(BaseModel):
+    vehicle_number: str
+    amount:         float
+    evidence_path:  Optional[str] = ""
+
+class MarkPaidIn(BaseModel):
+    challan_number: str
+
+# ==========================
+# DETECTION ENDPOINTS
+# ==========================
 @app.post("/helmet")
 async def detect_helmet(file: UploadFile = File(...)):
-    """Runs Safety Helmet Detection on the uploaded image."""
     try:
-        image_bytes = await file.read()
-        return run_inference(helmet_model, image_bytes)
+        img_bgr    = decode_image(await file.read())
+        detections = run_inference(helmet_model, img_bgr)
+        annotated  = annotate_image(img_bgr, detections)
+
+        violation, status, conf = detect_helmet_violation(detections)
+
+        return {
+            "detections":      detections,
+            "annotated_image": image_to_base64(annotated),
+            "count":           len(detections),
+            "helmet_violation": violation,
+            "helmet_status":   status,
+            "helmet_confidence": conf,
+            "plate_text":      "",
+            "ocr_confidence":  0.0,
+            "plate_detected":  False,
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/plate")
 async def detect_plate(file: UploadFile = File(...)):
-    """Runs License Plate Recognition on the uploaded image."""
     try:
-        image_bytes = await file.read()
-        return run_inference(plate_model, image_bytes)
+        img_bgr    = decode_image(await file.read())
+        detections = run_inference(plate_model, img_bgr)
+        annotated  = annotate_image(img_bgr, detections)
+        return {
+            "detections":      detections,
+            "annotated_image": image_to_base64(annotated),
+            "count":           len(detections),
+            "helmet_violation": False,
+            "helmet_status":   "N/A",
+            "helmet_confidence": 0.0,
+            "plate_text":      "",
+            "ocr_confidence":  0.0,
+            "plate_detected":  len(detections) > 0,
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/person")
 async def detect_person(file: UploadFile = File(...)):
-    """Runs Person Detection on the uploaded image."""
     try:
-        image_bytes = await file.read()
-        return run_inference(person_model, image_bytes)
+        img_bgr    = decode_image(await file.read())
+        detections = run_inference(person_model, img_bgr)
+        annotated  = annotate_image(img_bgr, detections)
+        return {
+            "detections":      detections,
+            "annotated_image": image_to_base64(annotated),
+            "count":           len(detections),
+            "helmet_violation": False,
+            "helmet_status":   "N/A",
+            "helmet_confidence": 0.0,
+            "plate_text":      "",
+            "ocr_confidence":  0.0,
+            "plate_detected":  False,
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/detect_all")
 async def detect_all(file: UploadFile = File(...)):
-    """Runs Safety Helmet, License Plate, and Passenger (Person) detection on the same image frame."""
     try:
-        image_bytes = await file.read()
-        
-        # 1. Convert bytes to PIL Image
-        try:
-            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        except Exception as e:
-            raise ValueError(f"Failed to decode image: {str(e)}")
-            
-        # 2. Convert to BGR array for OpenCV
-        img_bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        img_bgr   = decode_image(await file.read())
         img_clean = img_bgr.copy()
-        
-        detections = []
-        
-        # Helper to execute model on clean image, but draw on annotated image
-        def run_single_inference(model, class_mapping=None, default_color=(59, 130, 246)):
-            nonlocal img_bgr, detections
-            if model is None:
-                return
-                
-            # Run model on clean, un-annotated image
-            results = model(img_clean)
-            boxes = results[0].boxes
-            
-            if boxes is not None:
-                for box in boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    conf = float(box.conf[0])
-                    cls_id = int(box.cls[0])
-                    class_name = model.names[cls_id]
-                    
-                    # Class name mapping
-                    final_class = class_name
-                    if class_mapping and class_name in class_mapping:
-                        final_class = class_mapping[class_name]
-                        
-                    detections.append({
-                        "class": final_class,
-                        "confidence": conf,
-                        "bbox": [x1, y1, x2, y2]
-                    })
-                    
-                    # Select color based on category
-                    color = default_color
-                    if "no" in final_class.lower():
-                        color = (59, 17, 244)       # Red BGR
-                    elif final_class.lower() == "helmet":
-                        color = (16, 185, 129)      # Emerald BGR
-                    elif final_class.lower() == "passenger":
-                        color = (99, 102, 241)      # Indigo BGR
-                    elif "plate" in final_class.lower() or "number" in final_class.lower():
-                        color = (251, 191, 36)      # Amber BGR
-                        
-                    cv2.rectangle(img_bgr, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-                    
-                    label = f"{final_class} {conf:.2%}"
-                    (text_width, text_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                    
-                    label_y = max(int(y1), text_height + 10)
-                    cv2.rectangle(
-                        img_bgr, 
-                        (int(x1), label_y - text_height - 6), 
-                        (int(x1) + text_width + 4, label_y), 
-                        color, 
-                        -1
-                    )
-                    cv2.putText(
-                        img_bgr, 
-                        label, 
-                        (int(x1) + 2, label_y - 3), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 
-                        0.45, 
-                        (255, 255, 255), 
-                        1, 
-                        lineType=cv2.LINE_AA
-                    )
-                    
-        # Execute sequentially
-        run_single_inference(helmet_model, default_color=(16, 185, 129))
-        run_single_inference(plate_model, class_mapping={"license_plate": "number plate", "plate": "number plate"}, default_color=(251, 191, 36))
-        run_single_inference(person_model, class_mapping={"person": "passenger"}, default_color=(99, 102, 241))
-        
-        # 5. Convert OpenCV annotated image buffer back to base64 string
-        _, buffer = cv2.imencode('.jpg', img_bgr)
-        annotated_base64 = base64.b64encode(buffer).decode('utf-8')
-        
+        all_dets  = []
+
+        for model in [helmet_model, plate_model, person_model]:
+            if model:
+                dets = run_inference(model, img_clean)
+                all_dets.extend(dets)
+
+        annotated = annotate_image(img_bgr, all_dets)
+        violation, status, h_conf = detect_helmet_violation(all_dets)
+
+        plate_detected = any(
+            "plate" in d["class"].lower() or "number" in d["class"].lower()
+            for d in all_dets
+        )
+
         return {
-            "detections": detections,
-            "annotated_image": annotated_base64,
-            "count": len(detections)
+            "detections":       all_dets,
+            "annotated_image":  image_to_base64(annotated),
+            "count":            len(all_dets),
+            "helmet_violation": violation,
+            "helmet_status":    status,
+            "helmet_confidence": h_conf,
+            "plate_text":       "",
+            "ocr_confidence":   0.0,
+            "plate_detected":   plate_detected,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Merged inference error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/")
-async def root():
-    """Welcome endpoint listing active models."""
+# ==========================
+# VIOLATIONS ENDPOINTS
+# ==========================
+@app.get("/violations")
+async def get_violations():
+    rows = read_csv(VIOLATIONS_CSV, VIOLATION_COLS)
+    return {"violations": rows, "total": len(rows)}
+
+
+@app.post("/save-violation")
+async def save_violation(data: ViolationIn):
+    try:
+        row = {
+            "id":                str(uuid.uuid4())[:8],
+            "vehicle_number":    data.vehicle_number,
+            "helmet_status":     data.helmet_status,
+            "helmet_confidence": round(data.helmet_confidence * 100, 2),
+            "ocr_confidence":    round(data.ocr_confidence * 100, 2),
+            "image_path":        data.image_path or "",
+            "timestamp":         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "source_type":       data.source_type or "image_upload",
+        }
+        append_csv(VIOLATIONS_CSV, VIOLATION_COLS, row)
+        return {"success": True, "id": row["id"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================
+# CHALLANS ENDPOINTS
+# ==========================
+@app.get("/challans")
+async def get_challans():
+    rows = read_csv(CHALLANS_CSV, CHALLAN_COLS)
+    return {"challans": rows, "total": len(rows)}
+
+
+@app.post("/generate-challan")
+async def generate_challan(data: ChallanIn):
+    try:
+        challan_number = generate_challan_number()
+        row = {
+            "challan_number": challan_number,
+            "vehicle_number": data.vehicle_number,
+            "amount":         data.amount,
+            "status":         "pending",
+            "created_at":     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "paid_at":        "",
+            "evidence_path":  data.evidence_path or "",
+        }
+        append_csv(CHALLANS_CSV, CHALLAN_COLS, row)
+        return {"success": True, "challan_number": challan_number}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/mark-paid")
+async def mark_paid(data: MarkPaidIn):
+    try:
+        rows = read_csv(CHALLANS_CSV, CHALLAN_COLS)
+        found = False
+        for row in rows:
+            if row["challan_number"] == data.challan_number:
+                row["status"]  = "paid"
+                row["paid_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                found = True
+                break
+        if not found:
+            raise HTTPException(status_code=404, detail="Challan not found")
+        rewrite_csv(CHALLANS_CSV, CHALLAN_COLS, rows)
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================
+# STATS ENDPOINT
+# ==========================
+@app.get("/stats")
+async def get_stats():
+    violations = read_csv(VIOLATIONS_CSV, VIOLATION_COLS)
+    challans   = read_csv(CHALLANS_CSV,   CHALLAN_COLS)
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    total_violations  = len(violations)
+    total_challans    = len(challans)
+    pending_challans  = sum(1 for c in challans if c.get("status") == "pending")
+    paid_challans     = sum(1 for c in challans if c.get("status") == "paid")
+    today_violations  = sum(1 for v in violations if v.get("timestamp", "").startswith(today))
+    today_challans    = sum(1 for c in challans   if c.get("created_at", "").startswith(today))
+    unique_vehicles   = len(set(v.get("vehicle_number", "") for v in violations))
+
+    try:
+        total_amount = sum(
+            float(c.get("amount", 0)) for c in challans if c.get("status") == "paid"
+        )
+    except Exception:
+        total_amount = 0
+
     return {
-        "status": "running",
-        "service": "Multi-Model AI Detection API",
-        "models": ["helmet", "plate", "person"]
+        "total_violations":  total_violations,
+        "total_challans":    total_challans,
+        "total_detections":  total_violations,
+        "total_plates":      total_violations,
+        "pending_challans":  pending_challans,
+        "paid_challans":     paid_challans,
+        "today_violations":  today_violations,
+        "today_challans":    today_challans,
+        "unique_vehicles":   unique_vehicles,
+        "total_amount_collected": total_amount,
     }
 
 
+# ==========================
+# HEALTH & ROOT
+# ==========================
+@app.get("/")
+async def root():
+    return {
+        "status":  "running",
+        "service": "IBSCS AI Detection API v2.0",
+        "endpoints": [
+            "/helmet", "/plate", "/person", "/detect_all",
+            "/violations", "/save-violation",
+            "/challans", "/generate-challan", "/mark-paid",
+            "/stats", "/health"
+        ]
+    }
+
 @app.get("/health")
 async def health():
-    """Health check endpoint."""
     return {"status": "healthy"}
