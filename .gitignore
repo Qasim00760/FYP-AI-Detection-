@@ -1,39 +1,41 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
 .env
 venv/
 .venv/
-# Model files (too large for GitHub)
+
+# Model files (too large for GitHub - 100MB limit)
 *.pt
 *.pth
 *.onnx
 *.weights
-# Streamlit
-violations.csv
-.streamlit/
+
 # Node
 ai-detection-frontend/node_modules/
 ai-detection-frontend/dist/
+node_modules/
+dist/
 temp-node/
-# VS Code
+
+# Data files (generated at runtime)
+data/
+outputs/
+violations.csv
+challans.csv
+
+# VS Code & IDE
 .vscode/
+.sixth/
+.idea/
+
 # OS
 .DS_Store
 Thumbs.db
-# Rar files
+
+# Compressed
 *.rar
+*.zip
 
-
-# Project model weights
-ai-detection-backend/models/*.pt
-ai-detection-backend/models/*.pth
-ai-detection-backend/models/*.onnx
-ai-detection-backend/models/*.weights
-
-# Project model weights
-ai-detection-backend/models/*.pt
-ai-detection-backend/models/*.pth
-ai-detection-backend/models/*.onnx
-ai-detection-backend/models/*.weights
+# Python cache
+*.cpython-*.pyc
