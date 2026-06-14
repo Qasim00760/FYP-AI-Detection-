@@ -1,6 +1,8 @@
 __pycache__/
 *.py[cod]
 .env
-outputs/evidence/
-*.jpg
-*.png
+outputs/evidence/*.jpg
+outputs/evidence/*.png
+data/violations.csv
+data/challans.csv
+build_frontend.bat
